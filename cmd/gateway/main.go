@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"net/http"
 	"os"
 	"time"
@@ -16,10 +17,12 @@ import (
 	"github.com/go-kratos/gateway/proxy"
 	"github.com/go-kratos/gateway/proxy/debug"
 	"github.com/go-kratos/gateway/server"
+	kzerolog "github.com/go-kratos/kratos/contrib/log/zerolog/v2"
+	"github.com/rs/zerolog"
 
 	_ "net/http/pprof"
 
-	_ "github.com/go-kratos/gateway/discovery/consul"
+	_ "github.com/go-kratos/gateway/discovery/kubernetes"
 	_ "github.com/go-kratos/gateway/middleware/bbr"
 	"github.com/go-kratos/gateway/middleware/circuitbreaker"
 	_ "github.com/go-kratos/gateway/middleware/cors"
@@ -79,10 +82,7 @@ func init() {
 }
 
 func makeDiscovery() registry.Discovery {
-	if discoveryDSN == "" {
-		return nil
-	}
-	d, err := discovery.Create(discoveryDSN)
+	d, err := discovery.Create("kubernetes")
 	if err != nil {
 		log.Fatalf("failed to create discovery: %v", err)
 	}
@@ -91,6 +91,16 @@ func makeDiscovery() registry.Discovery {
 
 func main() {
 	flag.Parse()
+
+	zerolog.TimeFieldFormat = "2006-01-02 15:04:05.000"
+	zl := zerolog.New(os.Stdout)
+	logger := log.With(kzerolog.NewLogger(&zl),
+		"ts", log.DefaultTimestamp,
+		"caller", log.DefaultCaller,
+		"trace.id", tracing.TraceID(),
+		"span.id", tracing.SpanID(),
+	)
+	log.SetLogger(logger)
 
 	clientFactory := client.NewFactory(makeDiscovery())
 	p, err := proxy.New(clientFactory, middleware.Create)

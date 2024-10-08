@@ -2,19 +2,17 @@ package discovery
 
 import (
 	"fmt"
-	"net/url"
-
 	"github.com/go-kratos/kratos/v2/registry"
 )
 
 var globalRegistry = NewRegistry()
 
-type Factory func(dsn *url.URL) (registry.Discovery, error)
+type Factory func(scheme string) (registry.Discovery, error)
 
 // Registry is the interface for callers to get registered middleware.
 type Registry interface {
 	Register(name string, factory Factory)
-	Create(discoveryDSN string) (registry.Discovery, error)
+	Create(scheme string) (registry.Discovery, error)
 }
 
 type discoveryRegistry struct {
@@ -32,22 +30,13 @@ func (d *discoveryRegistry) Register(name string, factory Factory) {
 	d.discovery[name] = factory
 }
 
-func (d *discoveryRegistry) Create(discoveryDSN string) (registry.Discovery, error) {
-	if discoveryDSN == "" {
-		return nil, fmt.Errorf("discoveryDSN is empty")
-	}
-
-	dsn, err := url.Parse(discoveryDSN)
-	if err != nil {
-		return nil, fmt.Errorf("parse discoveryDSN error: %s", err)
-	}
-
-	factory, ok := d.discovery[dsn.Scheme]
+func (d *discoveryRegistry) Create(scheme string) (registry.Discovery, error) {
+	factory, ok := d.discovery[scheme]
 	if !ok {
-		return nil, fmt.Errorf("discovery %s has not been registered", dsn.Scheme)
+		return nil, fmt.Errorf("discovery %s has not been registered", scheme)
 	}
 
-	impl, err := factory(dsn)
+	impl, err := factory(scheme)
 	if err != nil {
 		return nil, fmt.Errorf("create discovery error: %s", err)
 	}
@@ -59,7 +48,7 @@ func Register(name string, factory Factory) {
 	globalRegistry.Register(name, factory)
 }
 
-// Create instantiates a discovery based on `discoveryDSN`.
-func Create(discoveryDSN string) (registry.Discovery, error) {
-	return globalRegistry.Create(discoveryDSN)
+// Create instantiates a discovery based on scheme.
+func Create(scheme string) (registry.Discovery, error) {
+	return globalRegistry.Create(scheme)
 }
